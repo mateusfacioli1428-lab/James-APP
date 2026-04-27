@@ -663,7 +663,12 @@
 
             container.innerHTML = `
                 <div class="max-w-5xl mx-auto space-y-8 pb-10 animacao-surgir">
-                    <div class="flex justify-end">
+                    
+                    <div class="flex justify-end gap-3">
+                        <a href="https://script.google.com/a/macros/magazineluiza.com.br/s/AKfycbzaaeGnsqLqZ-QMSCIjtvUaaycx81GHohVNgOW80wUVaxSOrIw_I0eC6LGXCaGminXBmQ/exec" target="_blank" class="bg-indigo-600 text-white px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-lg hover:bg-indigo-500 transition no-underline">
+                            <i class="ph-bold ph-calendar-check text-indigo-100 text-lg"></i> ProFlow - Smart Calendar
+                        </a>
+
                         <button onclick="exportarPDF()" class="bg-slate-900 text-white px-5 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 shadow-lg hover:bg-slate-800 transition">
                             <i class="ph-bold ph-file-pdf text-red-400 text-lg"></i> Gerar PDF
                         </button>
@@ -2319,6 +2324,113 @@ function exportarPDF() {
             if (c) historicoEstudos = (historicoEstudos || []).filter(e => e && e.modulo !== c.title);
             delete cursosDaTrilha[id]; 
             salvarDadosNaPlanilha(); renderizarTela(); msg('Módulo excluído.', 'success');
+        }
+
+        // ==========================================
+        // MODO ESCURO E SINCRONIZAÇÃO (RESTAGADOS DO LIMBO)
+        // ==========================================
+        
+        function aplicarDarkMode() { 
+            (isDarkMode) ? document.documentElement.classList.add('dark-theme') : document.documentElement.classList.remove('dark-theme'); 
+        }
+        
+        function toggleDarkMode() { 
+            isDarkMode = !isDarkMode; 
+            localStorage.setItem('james_dark_mode', isDarkMode); 
+            aplicarDarkMode(); 
+        }
+
+        async function sincronizarEquipeNuvem(event) {
+            const btn = event.currentTarget;
+            const textoOriginal = btn.innerHTML;
+            btn.innerHTML = '<i class="ph-bold ph-spinner animate-spin text-lg"></i> Buscando...';
+            
+            try {
+                // O Dicionário de Poderes
+                const emailParaEquipe = {
+                    'karina.aparecida@magazineluiza.com.br': 'Karina',
+                    'emerson.sousa@magazineluiza.com.br': 'Emerson',
+                    'renato@magazineluiza.com.br': 'MASTER', // O CHEFÃO!
+                    'mateus.facioli@magazineluiza.com.br': 'MASTER' // Pra você poder testar tbm!
+                };
+
+                const meuEmail = usuarioAtual.email.toLowerCase();
+                const minhaEquipe = emailParaEquipe[meuEmail];
+
+                if (!minhaEquipe) {
+                    btn.innerHTML = textoOriginal;
+                    return msg('Seu e-mail não está configurado como gestor líder.', 'error');
+                }
+
+                let snapshot;
+                if (minhaEquipe === 'MASTER') {
+                    snapshot = await db.collection('usuarios').get();
+                } else {
+                    snapshot = await db.collection('usuarios').where('perfilUsuario.gestao', '==', minhaEquipe).get();
+                }
+                
+                listaAnalistasGestao = [];
+                let novos = 0;
+
+                snapshot.forEach(doc => {
+                    const dbData = doc.data();
+                    
+                    if (doc.id.toLowerCase() === meuEmail) return; 
+
+                    const arrEstudos = Array.isArray(dbData.historicoEstudos) ? dbData.historicoEstudos.filter(Boolean) : [];
+                    const arrBiblio = Array.isArray(dbData.listaBiblioteca) ? dbData.listaBiblioteca.filter(Boolean) : [];
+                    const arrCursos = Array.isArray(dbData.listaCertificados) ? dbData.listaCertificados.filter(Boolean) : [];
+                    const arrIA = Array.isArray(dbData.listaIA) ? dbData.listaIA.filter(Boolean) : [];
+                    const arrSoc = Array.isArray(dbData.listaSocial) ? dbData.listaSocial.filter(Boolean) : [];
+                    const arrTat = Array.isArray(dbData.conquistasTaticas) ? dbData.conquistasTaticas.filter(Boolean) : [];
+                    const arrEmo = Array.isArray(dbData.emocoesSemanais) ? dbData.emocoesSemanais.filter(Boolean) : [];
+
+                    const valF = arrEstudos.length + arrBiblio.length + arrCursos.length + arrIA.length;
+                    const valS = arrSoc.length;
+                    const valP = arrTat.length + arrEmo.length;
+
+                    const pF = Math.min(100, Math.round((valF / 15) * 100)) || 0;
+                    const pS = Math.min(100, Math.round((valS / 5) * 100)) || 0;
+                    const pP = Math.min(100, Math.round((valP / 20) * 100)) || 0;
+
+                    const pUser = dbData.perfilUsuario || {};
+                    const pesoF = parseFloat(pUser.pesoF) || 10;
+                    const pesoS = parseFloat(pUser.pesoS) || 20;
+                    const pesoP = parseFloat(pUser.pesoP) || 70;
+
+                    const global = Math.round( (pF * (pesoF / 100)) + (pS * (pesoS / 100)) + (pP * (pesoP / 100)) ) || 0;
+
+                    let cargoStr = (pUser.cargo || 'Analista').toUpperCase();
+                    let sen = 'Júnior';
+                    if (cargoStr.includes('PLENO')) sen = 'Pleno';
+                    else if (cargoStr.includes('SÊNIOR') || cargoStr.includes('SENIOR')) sen = 'Sênior';
+                    else if (cargoStr.includes('ESPECIALISTA')) sen = 'Especialista';
+
+                    listaAnalistasGestao.push({
+                        id: doc.id,
+                        email: doc.id,
+                        nome: pUser.nome || 'Desconhecido',
+                        senioridade: sen,
+                        area: cargoStr, 
+                        gestao: pUser.gestao || 'Nenhuma',
+                        evolucao: global,
+                        dadosCompletos: dbData
+                    });
+                    novos++;
+                });
+
+                renderizarTela();
+                if (novos > 0) {
+                    msg(`Sucesso! ${novos} membros carregados do radar.`, 'success');
+                } else {
+                    msg('A equipe ainda está vazia no banco de dados.', 'info');
+                }
+            } catch(e) {
+                console.error(e);
+                msg('Erro ao buscar dados. Verifique sua conexão.', 'error');
+            } finally {
+                btn.innerHTML = textoOriginal;
+            }
         }
     </script>
 </body>
