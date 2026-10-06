@@ -1704,6 +1704,24 @@ function exportarPDF() {
 
         function editarId(id) { editandoId = id; renderizarTela(); }
 
+        function excluirItem(tipo, id) {
+            if (!confirm('Tem certeza que deseja excluir este item?')) return;
+            const manter = lista => (lista || []).filter(i => i && String(i.id) !== String(id));
+            switch (tipo) {
+                case 'estudos': historicoEstudos = manter(historicoEstudos); break;
+                case 'ia': listaIA = manter(listaIA); break;
+                case 'cursos': listaCertificados = manter(listaCertificados); break;
+                case 'biblioteca': listaBiblioteca = manter(listaBiblioteca); break;
+                case 'social': listaSocial = manter(listaSocial); break;
+                case 'taticas': conquistasTaticas = manter(conquistasTaticas); break;
+                case 'emocoes': emocoesSemanais = manter(emocoesSemanais); break;
+                default: return msg('Tipo de item desconhecido.', 'error');
+            }
+            if (String(editandoId) === String(id)) editandoId = null;
+            salvarDadosNaPlanilha(); renderizarTela();
+            msg('Item excluído.', 'success');
+        }
+
         function salvarItem(tipo) {
             const tit = document.getElementById('in-tit').value.trim();
             const txt = document.getElementById('in-txt').value.trim();
